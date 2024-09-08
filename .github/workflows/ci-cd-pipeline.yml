@@ -1,0 +1,88 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    - name: Log in to Docker Hub
+      run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+    - name: Build and push Docker images
+      run: |
+        services=("api-gateway" "account-management" "wallet" "trading")
+        for service in "${services[@]}"; do
+          docker build -t your-dockerhub-username/$service:latest ./$service
+          docker push your-dockerhub-username/$service:latest
+        done
+
+    - name: Set up Kubernetes CLI
+      uses: azure/setup-kubectl@v1
+      with:
+        version: '1.22.0'
+
+    - name: Deploy to Green Environment
+      env:
+        KUBECONFIG: ${{ secrets.KUBECONFIG }}
+      run: |
+        echo "$KUBECONFIG" > kubeconfig.yaml
+        kubectl --kubeconfig=kubeconfig.yaml apply -f kubernetes/green/trading-deployment.yaml
+        kubectl --kubeconfig=kubeconfig.yaml apply -f kubernetes/green/wallet-deployment.yaml
+        kubectl --kubeconfig=kubeconfig.yaml apply -f kubernetes/green/account-management-deployment.yaml
+        kubectl --kubeconfig=kubeconfig.yaml apply -f kubernetes/green/api-gateway-deployment.yaml
+
+    - name: Wait for rollouts
+      run: |
+        kubectl --kubeconfig=kubeconfig.yaml rollout status deployment/trading -n green
+        kubectl --kubeconfig=kubeconfig.yaml rollout status deployment/wallet -n green
+        kubectl --kubeconfig=kubeconfig.yaml rollout status deployment/account-management -n green
+        kubectl --kubeconfig=kubeconfig.yaml rollout status deployment/api-gateway -n green
+
+    - name: Run unit tests
+      run: |
+        services=("api-gateway" "account-management" "wallet" "trading")
+        for service in "${services[@]}"; do
+          cd $service
+          pip install -r requirements.txt
+          pytest
+          cd ..
+        done
+
+    - name: Run integration tests
+      run: |
+        ./test_integration.sh
+
+    - name: Run migrations
+      run: |
+        services=("trading" "wallet" "account-management")
+        for service in "${services[@]}"; do
+          cd $service
+          if [ -f "migrations" ]; then
+            flask db upgrade # For Flask-Migrate
+          elif [ -f "scripts/migrate-db.sh" ]; then
+            ./scripts/migrate-db.sh
+          fi
+          cd ..
+        done
+
+    - name: Switch Traffic to Green
+      env:
+        KUBECONFIG: ${{ secrets.KUBECONFIG }}
+      run: |
+        kubectl --kubeconfig=kubeconfig.yaml apply -f kubernetes/services.yaml # Update Service to point to Green
+        kubectl --kubeconfig=kubeconfig.yaml delete namespace blue # Optional: clean up Blue namespace
+
+    - name: Clean up
+      run: |
+        rm -f kubeconfig.yaml

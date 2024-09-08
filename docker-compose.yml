@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "5000:5000"
+    depends_on:
+      - trading-service
+      - wallet-service
+      - account-service
+      - notification-service
+      - centralized-logging
+
+  trading-service:
+    build: ./trading-service
+    ports:
+      - "5001:5001"
+
+  wallet-service:
+    build: ./wallet-service
+    ports:
+      - "5002:5002"
+
+  account-service:
+    build: ./account-service
+    ports:
+      - "5003:5003"
+
+  notification-service:
+    build: ./notification-service
+    ports:
+      - "5004:5004"
+
+  centralized-logging:
+    build: ./centralized-logging
+    ports:
+      - "5005:5005"
