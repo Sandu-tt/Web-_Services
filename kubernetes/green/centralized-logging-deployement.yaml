@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: centralized-logging
+  namespace: green
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: centralized-logging
+  template:
+    metadata:
+      labels:
+        app: centralized-logging
+    spec:
+      containers:
+        - name: centralized-logging
+          image: your-dockerhub-username/centralized-logging:latest
+          ports:
+            - containerPort:  5005
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: centralized-logging
+  namespace: green
+spec:
+  selector:
+    app: centralized-logging
+  ports:
+    - protocol: TCP
+      port: 5005
+      targetPort: 5005
+  type: ClusterIP
