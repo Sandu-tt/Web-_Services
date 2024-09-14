@@ -39,19 +39,19 @@ jobs:
         echo "$KUBECONFIG" > kubeconfig.yaml
         kubectl --kubeconfig=kubeconfig.yaml apply -f kubernetes/green/trading-deployment.yaml
         kubectl --kubeconfig=kubeconfig.yaml apply -f kubernetes/green/wallet-deployment.yaml
-        kubectl --kubeconfig=kubeconfig.yaml apply -f kubernetes/green/account-management-deployment.yaml
+        kubectl --kubeconfig=kubeconfig.yaml apply -f kubernetes/green/account-service-deployment.yaml
         kubectl --kubeconfig=kubeconfig.yaml apply -f kubernetes/green/api-gateway-deployment.yaml
 
     - name: Wait for rollouts
       run: |
         kubectl --kubeconfig=kubeconfig.yaml rollout status deployment/trading -n green
         kubectl --kubeconfig=kubeconfig.yaml rollout status deployment/wallet -n green
-        kubectl --kubeconfig=kubeconfig.yaml rollout status deployment/account-management -n green
+        kubectl --kubeconfig=kubeconfig.yaml rollout status deployment/account-service -n green
         kubectl --kubeconfig=kubeconfig.yaml rollout status deployment/api-gateway -n green
 
     - name: Run unit tests
       run: |
-        services=("api-gateway" "account-management" "wallet" "trading")
+        services=("api-gateway" "account-service" "wallet-service" "trading-service" "centralized-logging" "notification-service")
         for service in "${services[@]}"; do
           cd $service
           pip install -r requirements.txt
@@ -65,7 +65,7 @@ jobs:
 
     - name: Run migrations
       run: |
-        services=("trading" "wallet" "account-management")
+        services=("api-gateway" "account-service" "wallet-service" "trading-service" "centralized-logging" "notification-service")
         for service in "${services[@]}"; do
           cd $service
           if [ -f "migrations" ]; then
